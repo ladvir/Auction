@@ -1,0 +1,210 @@
+﻿@page "/"
+@using Auction.Models
+@using Auction.Services
+@inject AuctionService AuctionService
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using Blazored.LocalStorage
+@inject ILocalStorageService Localstorage;
+
+@if (_auctionItems == null)
+{
+    <h5>...načítám</h5>
+}
+else
+{
+    @if (_auctionItem == null)
+    {
+        <h5>Hledám položku k dražbě</h5>
+    }
+    else
+    {
+        <div class="auction">
+
+            <div class="card">
+                <h1>@_auctionItem.Name</h1>
+                <p class="price">@_auctionItem.CurrentPrice Kč</p>
+                <p>Aukce končí @_auctionItem.AuctionEnd.ToString("dd.MM.yyyy HH:mm")</p>
+            </div>
+
+
+            <EditForm EditContext="_editContext" FormName="bidForm">
+                <DataAnnotationsValidator/>
+                <div class="form-group">
+                    <label for="firstName">Jméno:</label>
+                    <InputText id="firstName" @bind-Value="_newBid.FirstName" class="form-control"/>
+                    <ValidationMessage For="@(() => _newBid.FirstName)"/>
+                </div>
+
+                <div class="form-group">
+                    <label for="lastName">Příjmení:</label>
+                    <InputText id="lastName" @bind-Value="_newBid.LastName" class="form-control"/>
+                    <ValidationMessage For="@(() => _newBid.LastName)"/>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <InputText id="email" @bind-Value="_newBid.Email" class="form-control"/>
+                    <ValidationMessage For="@(() => _newBid.Email)"/>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Telefon:</label>
+                    <InputText id="phone" @bind-Value="_newBid.Phone" class="form-control"/>
+                    <ValidationMessage For="@(() => _newBid.Phone)"/>
+                </div>
+
+                <button type="button" @onclick="Clear" class="btn btn-primary bid-buttons2">Smaž údaje</button>
+
+                <div class="bid-buttons">
+                    <div class="bid-button">
+                        <Confirm @ref="_confirmBidAmount" ResultChanged="PlaceBidConfirmationResultProvided">
+                            <label for="bidAmount">Navýšit částku na:</label>
+                            <InputNumber class="input-number" @bind-Value="@_newBid.BidAmount"/>
+                            <button id="bidAmount" class="btn btn-primary" @onclick="ConfirmBidAmount">Navýšit</button>
+                            <ValidationMessage For="@(() => _newBid.BidAmount)"/>
+                        </Confirm>
+                    </div>
+
+                    <div class="bid-button">
+                        <Confirm @ref="_confirmIncrease" ResultChanged="IncreaseConfirmationResultProvided">
+                            <label for="bidAmount2">Částka příhozu:</label>
+                            <InputNumber id="bidAmount2"  class="input-number" @bind-Value="@BidValue"/>
+                            <button type="button" @onclick="ConfirmIncrease" class="btn btn-primary ms-4">Příhoď</button>
+                        </Confirm>
+                    </div>
+                </div>
+
+               
+
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger">@_errorMessage</div>
+                }
+            </EditForm>
+        </div>
+    }
+}
+
+
+@code {
+    private Bid _newBid = new();
+    private AuctionItem? _auctionItem;
+    private List<AuctionItem?>? _auctionItems = [];
+    private string _errorMessage = string.Empty;
+    private EditContext _editContext = null!;
+    private Confirm _confirmBidAmount = new();
+
+    private Confirm _confirmIncrease = new();
+
+    private int BidValue { get; set; } = 100;
+
+    private void ConfirmIncrease()
+    {
+        if (!_editContext.Validate())
+        {
+            return;
+        }
+
+        _confirmIncrease.Display($"Opravdu si přejete závazně navýšit částku na {(_auctionItem?.CurrentPrice ?? 0) + BidValue}");
+    }
+
+    private void ConfirmBidAmount()
+    {
+        if (!_editContext.Validate())
+        {
+            return;
+        }
+
+        _confirmBidAmount.Display($"Opravdu si přejete závazně navýšit částku na {_newBid.BidAmount}");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editContext = new EditContext(_newBid);
+        await RefreshData();
+    }
+
+    private async Task RefreshData()
+    {
+        _auctionItems = await AuctionService.GetAuctionItems();
+        var x = _auctionItems.FirstOrDefault(x => x != null);
+
+        if (x == null) return;
+
+        _auctionItem = x;
+
+        
+            var bid = await Localstorage.GetItemAsync<Bid>("bid");
+            if (bid != null)
+            {
+                bid.Id = 0;
+            }
+            
+            _newBid = bid ?? new Bid();
+            
+        _newBid.AuctionItemId = _auctionItem!.Id;
+
+        _newBid.BidAmount = (_auctionItem?.CurrentPrice ?? 0) + 100;
+
+
+        _editContext = new EditContext(_newBid);
+    }
+
+    private async Task PlaceBidAsync()
+    {
+        _errorMessage = string.Empty;
+
+        if (!_editContext.Validate())
+        {
+            return;
+        }
+
+        try
+        {
+            await AuctionService.PlaceBid(_newBid);
+            await Localstorage.SetItemAsync("bid", _newBid);
+
+            await RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+
+    private async Task Increase()
+    {
+        _newBid.BidAmount = (_auctionItem?.CurrentPrice ?? 0) + BidValue;
+        await PlaceBidAsync();
+    }
+
+    private async Task PlaceBidConfirmationResultProvided(bool confirmed)
+    {
+        if (confirmed)
+        {
+            await PlaceBidAsync();
+        }
+    }
+
+    private async Task IncreaseConfirmationResultProvided(bool confirmed)
+    {
+        if (confirmed)
+        {
+            await Increase();
+        }
+    }
+
+    private void Clear()
+    {
+        _newBid = new Bid
+        {
+            AuctionItemId = _auctionItem!.Id,
+            BidAmount = (_auctionItem?.CurrentPrice ?? 0) + 100
+        };
+        _editContext = new EditContext(_newBid);
+    }
+
+}

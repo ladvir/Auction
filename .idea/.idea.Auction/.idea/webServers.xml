@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="de8372b3-e92b-40fd-8437-8bdec708ffaf" name="ftp.flotr.cz" url="https://www.flotr.cz/aukce">
+        <fileTransfer rootFolder="/wwwroot/aukce" host="ftp.flotr.cz" port="21">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

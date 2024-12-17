@@ -1,0 +1,29 @@
+﻿@page "/Reset"
+@using Auction.Models
+@using Auction.Services
+@inject AuctionService AuctionService
+@inject NavigationManager NavigationManager
+@using Blazored.LocalStorage
+@inject ILocalStorageService Localstorage;
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var bid = await Localstorage.GetItemAsync<Bid>("bid");
+        if (bid != null)
+        {
+            await Localstorage.RemoveItemAsync("bid");
+        }
+
+        var auctionItems = await AuctionService.GetAuctionItems();
+        var auctionItem = auctionItems.FirstOrDefault(x => x != null);
+
+        if (auctionItem != null)
+        {
+            await AuctionService.Reset(auctionItem.Id);
+        }
+
+        NavigationManager.NavigateTo("./");
+    }
+}
